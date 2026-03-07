@@ -91,9 +91,10 @@ img { max-width:100%; }
   transition:all 0.15s; cursor:pointer;
   -webkit-tap-highlight-color:transparent;
 }
-.nav-item svg { flex-shrink:0; }
-.nav-item:hover  { background:var(--surface2); color:var(--text); }
-.nav-item.active { background:rgba(96,165,250,0.12); color:var(--blue); font-weight:600; }
+.nav-item svg { flex-shrink:0; stroke:currentColor; }
+.nav-item:hover  { background:var(--surface2); color:#fff; }
+.nav-item.active { background:rgba(96,165,250,0.18); color:#fff; font-weight:600; }
+.nav-item.active svg { stroke:#fff; }
 
 /* Footer: user card + logout */
 .sidebar-footer {
@@ -290,17 +291,24 @@ img { max-width:100%; }
 }
 .btn-primary { background:var(--blue); color:#fff; }
 .btn-primary:hover { background:#4a8ff5; box-shadow:0 0 20px rgba(96,165,250,0.4); }
-.btn-success { background:var(--green); color:#061a0d; flex:1; justify-content:center; }
+.btn-primary svg { stroke:#fff; }
+.btn-success { background:var(--green); color:#fff; flex:1; justify-content:center; }
 .btn-success:hover { background:var(--green-d); }
+.btn-success svg { stroke:#fff; }
 .btn-outline {
   background:transparent; border:1px solid var(--border2); color:var(--muted);
 }
 .btn-outline:hover { background:var(--surface2); color:var(--text); }
-.btn-danger { background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.2); color:var(--red); }
-.btn-danger:hover { background:rgba(248,113,113,0.2); }
+.btn-danger { background:var(--red); border:none; color:#fff; }
+.btn-danger:hover { background:#ef4444; box-shadow:0 0 16px rgba(248,113,113,0.35); }
+.btn-danger svg { stroke:#fff; }
 .btn-sm { padding:6px 12px; font-size:0.77rem; }
-.btn-notif-on  { background:rgba(96,165,250,0.12); border:1px solid rgba(96,165,250,0.25); color:var(--blue); }
-.btn-notif-off { background:rgba(100,116,139,0.08); border:1px solid var(--border); color:var(--muted2); }
+.btn-notif-on  { background:var(--blue); border:none; color:#fff; }
+.btn-notif-on:hover { background:#4a8ff5; }
+.btn-notif-on svg { stroke:#fff; }
+.btn-notif-off { background:var(--surface3); border:1px solid var(--border); color:#fff; }
+.btn-notif-off:hover { background:var(--surface2); }
+.btn-notif-off svg { stroke:#fff; }
 .btn.disabled,.btn:disabled { opacity:0.5; cursor:default; pointer-events:none; }
 
 /* ════════════════════════════════════════════════════

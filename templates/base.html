@@ -14,6 +14,7 @@
 <body
   data-user-name="{{ user_name | default('') }}"
   data-user-phone="{{ session.get('user_phone','') }}"
+  data-user-id="{{ session.get('user_id','guest') }}"
 >
 
 <div class="sidebar-overlay" id="sidebarOverlay"></div>

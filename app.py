@@ -244,8 +244,9 @@ def taken(med_id):
     cur.execute("SELECT * FROM medicines WHERE id=? AND user_id=?", (med_id, user_id))
     med = cur.fetchone()
     if med:
-        cur.execute("UPDATE medicines SET taken=1 WHERE id=? AND user_id=?", (med_id, user_id))
-        # Decrement quantity if tracking
+        # Do NOT permanently set taken=1 on medicines row.
+        # Per-day taken state is derived from medicine_history.
+        # Only decrement quantity tracking.
         if med["quantity_remaining"] and med["quantity_remaining"] > 0:
             cur.execute("UPDATE medicines SET quantity_remaining=quantity_remaining-1 WHERE id=?", (med_id,))
         cur.execute("""
@@ -290,7 +291,7 @@ def mark_not_taken(med_id):
     if not cur.fetchone():
         cur.execute("SELECT * FROM medicines WHERE id=? AND user_id=?", (med_id, user_id))
         med = cur.fetchone()
-        if med and med["taken"] == 0:
+        if med:  # taken state is derived from history, not the medicines row
             cur.execute("""
                 INSERT INTO medicine_history
                     (user_id,medicine_id,medicine_name,dosage,scheduled_time,taken,taken_at,date)
@@ -308,14 +309,21 @@ def api_medicines():
     today   = date.today().isoformat()
     con = get_db()
     cur = con.cursor()
+    # Join with today's history to derive per-day taken status.
+    # This ensures medicines reset correctly each new day.
     cur.execute("""
-        SELECT id, name, type, dosage, amount, time,
-               start_date, finish_date,
-               notification_enabled, taken,
-               total_quantity, quantity_remaining
-        FROM medicines
-        WHERE user_id=? AND start_date<=? AND finish_date>=?
-    """, (user_id, today, today))
+        SELECT m.id, m.name, m.type, m.dosage, m.amount, m.time,
+               m.start_date, m.finish_date,
+               m.notification_enabled,
+               m.total_quantity, m.quantity_remaining,
+               CASE WHEN mh.id IS NOT NULL THEN mh.taken ELSE 0 END AS taken
+        FROM medicines m
+        LEFT JOIN medicine_history mh
+            ON  mh.medicine_id = m.id
+            AND mh.user_id     = m.user_id
+            AND mh.date        = ?
+        WHERE m.user_id=? AND m.start_date<=? AND m.finish_date>=?
+    """, (today, user_id, today, today))
     data = [dict(r) for r in cur.fetchall()]
 
     # Also get caregiver info
@@ -474,4 +482,4 @@ def admin_reset_password(uid):
     return redirect(url_for("admin_user_detail", uid=uid))
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", debug=True, use_reloader=False)
+    app.run(host= "0.0.0.0", debug=True, use_reloader=False)
