@@ -225,6 +225,25 @@ self.addEventListener('message', e => {
 // Auto-start on activate
 self.addEventListener('activate', () => { setTimeout(startPolling, 2000); });
 
+
+// ─────────────────────────────────────────────────────────────────
+//  BACKGROUND SYNC — fires SW even after Android kills setInterval
+//  The page registers 'medtrack-poll' sync tag on every visibilitychange.
+//  Chrome re-fires this when connectivity/battery allows.
+// ─────────────────────────────────────────────────────────────────
+self.addEventListener('sync', e => {
+  if (e.tag === 'medtrack-poll') {
+    e.waitUntil(pollAndNotify());
+  }
+});
+
+// Periodic Background Sync (Chrome Android 80+) — fires every ~15 min
+self.addEventListener('periodicsync', e => {
+  if (e.tag === 'medtrack-periodic') {
+    e.waitUntil(pollAndNotify());
+  }
+});
+
 // Server-push (future)
 self.addEventListener('push', e => {
   let d = { title:'MedTrack', body:'Medicine reminder', icon:'/static/images/logo.jpg', tag:'medtrack', urgent:false };

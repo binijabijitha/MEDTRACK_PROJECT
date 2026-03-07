@@ -98,6 +98,25 @@ function kickSWPolling() {
   const userName = (document.body.dataset.userName || 'Patient').trim();
   ctrl.postMessage({ type: 'USER_INFO', userName, userId: uid });
   ctrl.postMessage({ type: 'START_POLLING' });
+
+  // Also register a Background Sync tag so Android re-wakes the SW
+  // even if the OS killed the setInterval.
+  if ('serviceWorker' in navigator && 'SyncManager' in window) {
+    navigator.serviceWorker.ready.then(reg => {
+      reg.sync.register('medtrack-poll').catch(() => {});
+    }).catch(() => {});
+  }
+  // Periodic Background Sync (Chrome Android 80+, requires permission)
+  if ('serviceWorker' in navigator && 'periodicSync' in (window.ServiceWorkerRegistration?.prototype || {})) {
+    navigator.serviceWorker.ready.then(async reg => {
+      try {
+        const status = await navigator.permissions.query({ name: 'periodic-background-sync' });
+        if (status.state === 'granted') {
+          await reg.periodicSync.register('medtrack-periodic', { minInterval: 15 * 60 * 1000 });
+        }
+      } catch(_) {}
+    }).catch(() => {});
+  }
 }
 
 navigator.serviceWorker?.addEventListener('message', e => {
@@ -394,6 +413,52 @@ function saveSets() {
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  MISSED DOSE WHATSAPP BANNER
+//  Full-width tappable banner. The <a href> link is tapped by the
+//  user directly — always a valid gesture, never popup-blocked.
+//  Works on Android Chrome, iOS Safari, all mobile browsers.
+// ─────────────────────────────────────────────────────────────────
+function showMissedWaBanner(waNum, waText, cgName, medName) {
+  document.getElementById('missedWaBanner')?.remove();
+  const url = `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}`;
+  const bar = document.createElement('div');
+  bar.id = 'missedWaBanner';
+  bar.style.cssText = `
+    position:fixed;bottom:0;left:0;right:0;z-index:99990;
+    background:linear-gradient(135deg,#7f1d1d,#991b1b);
+    border-top:2px solid #f87171;
+    padding:14px 16px;
+    display:flex;align-items:center;gap:12px;
+    box-shadow:0 -4px 24px rgba(0,0,0,.5);
+    animation:toastIn .3s ease;
+  `;
+  bar.innerHTML = `
+    <span style="font-size:26px;flex-shrink:0;">🚨</span>
+    <div style="flex:1;min-width:0;">
+      <div style="font-weight:800;font-size:.9rem;color:#fff;margin-bottom:2px;">
+        Missed: ${medName}
+      </div>
+      <div style="font-size:.76rem;color:rgba(255,255,255,.75);">
+        Tap to send WhatsApp alert to ${cgName}
+      </div>
+    </div>
+    <a href="${url}" target="_blank"
+       style="background:#25d366;color:#fff;font-weight:800;font-size:.85rem;
+              padding:10px 16px;border-radius:10px;text-decoration:none;
+              white-space:nowrap;flex-shrink:0;
+              display:flex;align-items:center;gap:6px;"
+       onclick="document.getElementById('missedWaBanner')?.remove();">
+      📲 Alert ${cgName}
+    </a>
+    <button onclick="document.getElementById('missedWaBanner')?.remove();"
+      style="background:none;border:none;color:rgba(255,255,255,.6);
+             font-size:22px;cursor:pointer;padding:0;flex-shrink:0;">✕</button>
+  `;
+  document.body.appendChild(bar);
+  setTimeout(() => bar?.remove(), 300_000);
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  PAGE-SIDE REMINDER ENGINE
 //
 //  KEY FIX: Use TIME WINDOWS not exact-minute equality.
@@ -460,14 +525,25 @@ async function checkReminders() {
 
       const waNum  = (cgPhone || userPhone).replace(/\D/g, '');
       const waText = buildWaMissedText(userName, med);
-      pushNotif(
-        '❌ Missed Dose — Tap notification to alert caregiver',
-        `${notifBody(med)}\n\nNOT taken. Tap "Alert Caregiver on WhatsApp" in the notification above.`,
+
+      // OS notification (works in background; action button works when app is backgrounded)
+      showOsNotif(
+        '❌ Missed Dose — Tap to Alert Caregiver',
+        `${notifBody(med)}\n\nNOT taken. Tap the WhatsApp button to alert ${cgName}.`,
         true, `missed-${med.id}`, waNum, waText
       );
 
-      // Reload dashboard after 2s so "not taken" status shows
-      setTimeout(() => { if (location.pathname === '/dashboard') location.reload(); }, 2000);
+      // In-page toast (always shown when page is open)
+      showToast('❌ Missed Dose', `${notifBody(med)}\n\nNOT taken.`, 'alarm', 30000);
+
+      // Mobile WhatsApp alert: show a prominent tappable banner.
+      // window.open() called from a user tap = valid gesture, never blocked.
+      if (waNum) {
+        showMissedWaBanner(waNum, waText, cgName, med.name);
+      }
+
+      // Reload dashboard after 3s so "not taken" status shows
+      setTimeout(() => { if (location.pathname === '/dashboard') location.reload(); }, 3000);
     }
   }
 }
@@ -668,4 +744,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Poll every 15 seconds for better timing accuracy
   checkReminders();
   setInterval(checkReminders, 15_000);
+
+  // Re-kick SW polling every time the user comes back to the tab/app.
+  // This is critical on Android: the OS suspends the SW when Chrome is
+  // backgrounded. When the user returns, we wake it up again.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      kickSWPolling();
+      checkReminders(); // immediate check on return
+    }
+  });
 });
